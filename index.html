@@ -194,6 +194,12 @@
   /* Adress-Vorschläge nicht abschneiden, bis zu 6 Einträge sichtbar */
   #v-address main{overflow:visible}
   .suggest{max-height:none}
+  /* Schritt 4: Richtungen */
+  .dirs{padding:0 10px 10px}
+  .dirrow{display:grid;grid-template-columns:58px 1fr;gap:6px;align-items:start;padding-top:10px}
+  .dline{padding-top:3px}
+  .dopts{display:flex;flex-wrap:wrap;gap:6px}
+  .dchip{min-width:0;text-align:left}
 </style>
 </head>
 <body>
@@ -218,7 +224,7 @@
 
   <!-- Schritt 1: Adresse + Radius -->
   <section id="v-address" class="view" hidden>
-    <div class="bar step"><span>Schritt 1 von 3</span></div>
+    <div class="bar step"><span>Schritt 1 von 4</span></div>
     <main class="pad">
       <form id="addrForm" autocomplete="off">
         <div class="row">
@@ -240,7 +246,7 @@
 
   <!-- Schritt 2: Stationen -->
   <section id="v-stations" class="view" hidden>
-    <div class="bar step"><span>Schritt 2 von 3</span></div>
+    <div class="bar step"><span>Schritt 2 von 4</span></div>
     <main>
       <div class="pad">
         <div class="label">Verkehrsmittel</div>
@@ -253,11 +259,17 @@
 
   <!-- Schritt 3: Linien -->
   <section id="v-lines" class="view" hidden>
-    <div class="bar step"><span>Schritt 3 von 3</span></div>
+    <div class="bar step"><span>Schritt 3 von 4</span></div>
     <main id="lnList"></main>
   </section>
 
   <!-- Tafel -->
+  <!-- Schritt 4: Richtungen -->
+  <section id="v-dirs" class="view" hidden>
+    <div class="bar step"><span>Schritt 4 von 4</span></div>
+    <main id="dirList"></main>
+  </section>
+
   <section id="v-board" class="view" hidden>
     <div class="demo" id="demoNote" hidden>DEMO-MODUS – Hier sind keine Live-Daten erreichbar. Auf dem Handy installiert zeigt die App echte BVG-Abfahrten.</div>
     <div class="bar"><span>Linie</span><span></span><span>Abfahrt in</span></div>
@@ -306,7 +318,7 @@
     products: (config?.products || ["suburban","subway","tram","bus"]).filter(p => ["suburban","subway","tram","bus"].includes(p)),
     found: [],                                   // Stationen im Radius
     selected: new Set(),
-    lines: {}
+    lines: {}, dirs: {}, dirOpts: {}
   };
   function structuredCloneSafe(o){ return JSON.parse(JSON.stringify(o)); }
   let demo = false, boardTimer = null, lastBoard = null;
@@ -331,7 +343,7 @@
     if(view !== "board"){ clearTimeout(boardTimer); }
     $("#menu").hidden = true;
     document.querySelector("footer").classList.toggle("plain", view === "cover");
-    ({cover: footCover, address: footAddress, stations: footStations, lines: footLines, board: footBoard})[view]();
+    ({cover: footCover, address: footAddress, stations: footStations, lines: footLines, dirs: footDirs, board: footBoard})[view]();
     window.scrollTo(0,0);
     currentView = view; saveSession();
   }
@@ -341,7 +353,7 @@
     store.set("session", {
       view: currentView, demo, addr: $("#addr").value,
       draft: { place: draft.place, radius: draft.radius, products: draft.products, found: draft.found,
-               selected: [...draft.selected], lines: draft.lines }
+               selected: [...draft.selected], lines: draft.lines, dirs: draft.dirs, dirOpts: draft.dirOpts }
     });
   }
   const saveSoon = () => setTimeout(saveSession, 0);
@@ -435,9 +447,9 @@
       draft.place = place;
       const raw = await api("/locations/nearby", {latitude:place.lat, longitude:place.lon, distance:draft.radius, results:80, stops:true, poi:false, linesOfStops:true});
       draft.found = mergeStops(raw.filter(s => s.type === "stop" || s.type === "station"));
-      draft.selected.clear(); draft.lines = {};
+      draft.selected.clear(); draft.lines = {}; draft.dirs = {}; draft.dirOpts = {};
     }catch(err){
-      startDemo(q); draft.selected.clear(); draft.lines = {};
+      startDemo(q); draft.selected.clear(); draft.lines = {}; draft.dirs = {}; draft.dirOpts = {};
     }
     show("stations"); renderStations();
   }
@@ -574,8 +586,97 @@
   }
   function footLines(){
     const n = selectedStations().reduce((acc, st) => acc + (draft.lines[st.key] || []).length, 0);
-    actions(`<button class="btn ghost" id="back2">Zurück</button><button class="btn" id="finish" ${n ? "" : "disabled"}>Fahrplan anzeigen</button>`);
+    actions(`<button class="btn ghost" id="back2">Zurück</button><button class="btn" id="toDirs" ${n ? "" : "disabled"}>Weiter</button>`);
     $("#back2").onclick = () => { show("stations"); renderStations(); };
+    $("#toDirs").onclick = gotoDirs;
+  }
+
+  // ---------- Schritt 4: Richtungen ----------
+  const TERMINI = {
+    "U6":["Alt-Mariendorf","Kurt-Schumacher-Platz"], "184":["S+U Tempelhof","Lichterfelde, Oberhofer Platz"], "N6":["Alt-Mariendorf","Alt-Tegel"],
+    "U8":["Paracelsus-Bad","Wittenau","Hermannstraße"], "S41":["Ringbahn"], "S42":["Ringbahn"], "S45":["Flughafen BER","Südkreuz"],
+    "S46":["S Königs Wusterhausen","Westend"], "S47":["Spindlersfeld","Hermannstraße"], "M44":["Alt-Buckow","Hermannplatz"],
+    "246":["Zoologischer Garten","Hermannstraße"], "370":["U Britz-Süd","Hermannstraße"], "M27":["S+U Pankow","S Schöneweide"], "U7":["Rudow","Rathaus Spandau"],
+    "U1":["Ginnheim","Südbahnhof"], "U2":["Bad Homburg-Gonzenheim","Südbahnhof"], "U3":["Oberursel-Hohemark","Südbahnhof"],
+    "U4":["Bockenheimer Warte","Enkheim"], "U5":["Preungesheim","Hauptbahnhof"], "U8F":["Riedberg","Südbahnhof"],
+    "11":["Fechenheim Schießhüttenstraße","Höchst Zuckschwerdtstraße"], "12":["Schwanheim Rheinlandstraße","Fechenheim Hugo-Junkers-Straße"],
+    "U6F":["Heerstraße","Ostbahnhof"], "U7F":["Hausen","Enkheim"], "S1":["Wiesbaden Hbf","Rödermark-Ober-Roden"], "S2":["Niedernhausen","Dietzenbach"],
+    "S3":["Bad Soden","Darmstadt Hbf"], "S4":["Kronberg","Langen"], "S5":["Friedrichsdorf","Südbahnhof"], "S6":["Friedberg","Südbahnhof"],
+    "S8":["Wiesbaden Hbf","Hanau Hbf"], "S9":["Wiesbaden Hbf","Hanau Hbf"]
+  };
+  function termini(line){
+    if(provider === "rmv" && TERMINI[line+"F"]) return TERMINI[line+"F"];
+    return TERMINI[line] || [];
+  }
+  async function gotoDirs(){
+    const sts = selectedStations().filter(st => (draft.lines[st.key] || []).length);
+    const btn = $("#toDirs"); btn.disabled = true; btn.innerHTML = '<span class="loading">Lade Richtungen</span>';
+    await Promise.allSettled(sts.map(async st => {
+      const opts = draft.dirOpts[st.key] || (draft.dirOpts[st.key] = {});
+      const want = draft.lines[st.key];
+      if(want.every(l => opts[l] && opts[l].length)) return;
+      const add = (l, d) => { d = cleanName(d); if(!d) return; (opts[l] = opts[l] || []); if(!opts[l].includes(d)) opts[l].push(d); };
+      if(demo){
+        const pool = demoPool();
+        (pool[st.ids[0]] || []).forEach(([n,dir]) => { if(want.includes(n)) add(n, dir); });
+        want.forEach(l => termini(l).forEach(d => add(l, d)));
+        return;
+      }
+      const res = await Promise.allSettled(st.ids.map(id => api(`/stops/${encodeURIComponent(id)}/departures`, {duration:240, results:300, remarks:false, linesOfStops:false})));
+      res.forEach(r => { if(r.status === "fulfilled") depsOf(r.value).forEach(d => { if(d.line && want.includes(d.line.name)) add(d.line.name, d.direction); }); });
+    }));
+    show("dirs"); renderDirs();
+  }
+  function renderDirs(){
+    const sts = selectedStations().filter(st => (draft.lines[st.key] || []).length);
+    $("#dirList").innerHTML = sts.map(st => {
+      const lines = sortLines(st.lines.filter(l => draft.lines[st.key].includes(l.name)));
+      const opts = draft.dirOpts[st.key] || {}, sel = draft.dirs[st.key] || {};
+      const rows = lines.map(l => {
+        const o = opts[l.name] || [];
+        const chips = o.length
+          ? o.map(d => `<button type="button" class="lchip dchip" data-k="${esc(st.key)}" data-l="${esc(l.name)}" data-d="${esc(d)}" aria-pressed="${(sel[l.name]||[]).includes(d)}">${esc(d)}</button>`).join("")
+          : `<span class="empty" style="padding:0">Gerade keine Fahrten – alle Richtungen</span>`;
+        return `<div class="dirrow"><span class="dline">${esc(l.name)}</span><div class="dopts">${chips}</div></div>`;
+      }).join("");
+      return `<section class="station"><div class="st-head"><span class="name glow">${esc(st.name)}</span>
+        <button class="mini" type="button" data-dall="${esc(st.key)}">Alle</button><button class="mini" type="button" data-dnone="${esc(st.key)}">Keine</button></div>
+        <div class="dirs">${rows}</div></section>`;
+    }).join("");
+    footDirs();
+  }
+  // Gleiche Linie + Richtung an allen Stationen gemeinsam wählen
+  function setDirEverywhere(line, dir, on){
+    for(const st of selectedStations()){
+      const o = (draft.dirOpts[st.key] || {})[line];
+      if(!o || !o.includes(dir) || !(draft.lines[st.key] || []).includes(line)) continue;
+      const m = draft.dirs[st.key] || (draft.dirs[st.key] = {});
+      const arr = m[line] || (m[line] = []);
+      const i = arr.indexOf(dir);
+      if(on && i < 0) arr.push(dir);
+      if(!on && i >= 0) arr.splice(i,1);
+    }
+  }
+  $("#dirList").addEventListener("click", e => {
+    const c = e.target.closest(".dchip");
+    if(c){
+      const on = c.getAttribute("aria-pressed") !== "true";
+      setDirEverywhere(c.dataset.l, c.dataset.d, on); renderDirs(); return;
+    }
+    const a = e.target.closest("[data-dall],[data-dnone]"); if(!a) return;
+    const k = a.dataset.dall || a.dataset.dnone, opts = draft.dirOpts[k] || {};
+    (draft.lines[k] || []).forEach(l => (opts[l] || []).forEach(d => setDirEverywhere(l, d, !!a.dataset.dall)));
+    renderDirs();
+  });
+  function dirCount(){
+    return selectedStations().reduce((acc, st) => {
+      const opts = draft.dirOpts[st.key] || {}, sel = draft.dirs[st.key] || {};
+      return acc + (draft.lines[st.key] || []).reduce((a,l) => a + ((opts[l]||[]).length ? (sel[l]||[]).length : 1), 0);
+    }, 0);
+  }
+  function footDirs(){
+    actions(`<button class="btn ghost" id="back3">Zurück</button><button class="btn" id="finish" ${dirCount() ? "" : "disabled"}>Fahrplan anzeigen</button>`);
+    $("#back3").onclick = () => { show("lines"); renderLines(); };
     $("#finish").onclick = finish;
   }
   function finish(){
@@ -587,6 +688,7 @@
       found: draft.found.map(({key,name,ids,distance,lat,lon,lines,products}) => ({key,name,ids,distance,lat,lon,lines,products})),
       selected: [...draft.selected],
       allLines: structuredCloneSafe(draft.lines),
+      dirs: structuredCloneSafe(draft.dirs), dirOpts: structuredCloneSafe(draft.dirOpts),
       demo
     };
     store.set("config", config);
@@ -599,10 +701,11 @@
       .map(s => ({...s, lines:[...(s.lines||[])], products:[...(s.products||[])]}));
     draft.selected = new Set(config.selected || config.stations.map(s => s.key));
     draft.lines = structuredCloneSafe(config.allLines || config.lines);
+    draft.dirs = structuredCloneSafe(config.dirs || {}); draft.dirOpts = structuredCloneSafe(config.dirOpts || {});
   }
   function resetDraftFromConfig(){
     draft.place = config.place; draft.radius = config.radius; draft.products = [...config.products];
-    draft.selected = new Set(); draft.lines = {};
+    draft.selected = new Set(); draft.lines = {}; draft.dirs = {}; draft.dirOpts = {};
   }
 
   // ---------- Tafel ----------
@@ -613,7 +716,7 @@
   $("#menu").addEventListener("click", backFromBoard);
   function backFromBoard(){
     restoreDraftFromConfig();
-    show("lines"); renderLines();
+    show("dirs"); renderDirs();
   }
   async function openSetup(){
     resetDraftFromConfig();
@@ -668,7 +771,9 @@
       const want = new Set(config.lines[st.key] || []);
       html += `<section class="station"><div class="st-head"><span class="name glow">${esc(st.name)}</span></div>`;
       if(deps === null){ html += `<div class="empty">Abfahrten gerade nicht verfügbar.</div></section>`; continue; }
-      const list = deps.filter(d => d.line && want.has(d.line.name) && !d.cancelled)
+      const dsel = (config.dirs || {})[st.key] || {}, dopt = (config.dirOpts || {})[st.key] || {};
+      const dirOk = d => { const o = dopt[d.line.name]; if(!o || !o.length) return true; return (dsel[d.line.name] || []).includes(cleanName(d.direction)); };
+      const list = deps.filter(d => d.line && want.has(d.line.name) && !d.cancelled && dirOk(d))
         .filter(d => { const m = mins(d); return m == null || m >= -1; })
         .sort((a,b) => new Date(a.when||a.plannedWhen) - new Date(b.when||b.plannedWhen))
         .slice(0, DEPS_PER_STOP);
@@ -712,9 +817,7 @@
     draft.place = (draft.place && !rmv) ? draft.place : {label, lat: rmv ? 50.1092 : 52.467, lon: rmv ? 8.6734 : 13.431};
     draft.found = (rmv ? DEMO_RMV : DEMO).filter(s => s.distance <= draft.radius).map(s => ({...s, lines:[...s.lines], products:[...new Set(s.lines.map(l => l.product))]}));
   }
-  function demoBoard(){
-    const at = m => new Date(Date.now() + m*60000).toISOString();
-    const pool = {
+  function demoPool(){ return {
       d1:[["184","S+U Tempelhof",0],["U6","Alt-Mariendorf",0.3,["Fahrradmitnahme möglich","barrierefrei"]],["184","Lichterfelde, Oberhofer Platz",3,null,120],
           ["U6","Kurt-Schumacher-Platz",3,["Aufzug im Bahnhof außer Betrieb","Zugang über Treppe"]],["U6","Alt-Mariendorf",8],["184","S+U Tempelhof",12]],
       d2:[["S42","Ringbahn",0],["U8","Paracelsus-Bad",2],["S46","S Königs Wusterhausen",2],["S41","Ringbahn",4],["M44","Alt-Buckow",6,null,0,true],["U8","Wittenau",7],["S45","Flughafen BER",9]],
@@ -725,7 +828,10 @@
       f2:[["12","Fechenheim Hugo-Junkers-Straße",1],["U5","Hauptbahnhof",3],["11","Höchst Zuckschwerdtstraße",5],["U4","Enkheim",8]],
       f3:[["S8","Wiesbaden Hbf",1],["U6","Heerstraße",2],["S3","Bad Soden",3],["U1","Südbahnhof",4],["U7","Hausen",5],["S5","Friedrichsdorf",6,null,180],["U3","Oberursel-Hohemark",8]],
       f4:[["S1","Rödermark-Ober-Roden",2],["U4","Enkheim",3],["S6","Friedberg",5],["12","Fechenheim Hugo-Junkers-Straße",7],["U7","Enkheim",9]]
-    };
+    }; }
+  function demoBoard(){
+    const at = m => new Date(Date.now() + m*60000).toISOString();
+    const pool = demoPool();
     return config.stations.map(st => ({st, deps:(pool[st.ids[0]] || []).map(([n,dir,m,rem,delay,cancel]) => ({
       line:{name:n}, direction:dir, when:at(m), delay, cancelled:cancel, remarks:(rem||[]).map(t => ({type:"warning",text:t}))
     }))}));
@@ -746,6 +852,7 @@
     if(v === "board" && config && config.stations?.length){ demo = !!config.demo; show("board"); loadBoard(); }
     else if(v === "stations" && draft.found.length){ show("stations"); renderStations(); }
     else if(v === "lines" && draft.found.length){ show("lines"); renderLines(); }
+    else if(v === "dirs" && draft.found.length){ draft.dirs = draft.dirs || {}; draft.dirOpts = draft.dirOpts || {}; show("dirs"); renderDirs(); }
     else if(v === "address"){ show("address"); $("#addr").value = sess.addr || ""; }
     else show("cover");
   }

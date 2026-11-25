@@ -1,5 +1,5 @@
 // Gleich – Service Worker: App-Dateien offline verfügbar, Abfahrtsdaten immer live.
-const CACHE = "gleich-v24";
+const CACHE = "gleich-v25";
 const SHELL = ["./", "index.html", "manifest.json", "icon-192.png", "icon-512.png", "apple-touch-icon.png", "icon-bvg-512.png", "icon-rmv-512.png"];
 
 self.addEventListener("install", e => {
