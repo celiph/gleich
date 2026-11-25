@@ -191,6 +191,9 @@
   .provider .btn{flex:1}
   /* RMV-Farbschema: Türkis */
   :root.rmv{--accent:#00b5b8}
+  /* Adress-Vorschläge nicht abschneiden, bis zu 6 Einträge sichtbar */
+  #v-address main{overflow:visible}
+  .suggest{max-height:none}
 </style>
 </head>
 <body>
@@ -389,9 +392,9 @@
     sugTimer = setTimeout(async () => {
       const seq = ++sugSeq;
       try{
-        const res = await api("/locations", {query:q, results:6, addresses:true, stops:true, poi:false, fuzzy:true});
+        const res = await api("/locations", {query:q, results:5, addresses:true, stops:true, poi:false, fuzzy:true});
         if(seq !== sugSeq) return;
-        const list = res.map(toPlace).filter(Boolean);
+        const list = res.map(toPlace).filter(Boolean).slice(0,5);
         if(!list.length){ sug.hidden = true; return; }
         sug.innerHTML = list.map((p,i) => `<button type="button" data-i="${i}">${p.stop ? "Ⓗ " : "⌂ "}${esc(p.label)}</button>`).join("");
         sug.hidden = false;
@@ -620,7 +623,7 @@
   async function loadBoard(){
     clearTimeout(boardTimer);
     if(!config) return;
-    if(!lastBoard) $("#board").innerHTML = `<div class="msg"><span class="loading">Lade Abfahrten</span></div>`;
+    if(!lastBoard) $("#board").innerHTML = `<div class="msg"><span class="loading">Lade Fahrplan</span></div>`;
     if(demo){ lastBoard = demoBoard(); renderBoard(lastBoard); boardTimer = setTimeout(loadBoard, 15000); return; }
     try{
       const results = await Promise.all(config.stations.map(async st => {
