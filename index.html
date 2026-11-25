@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gleich</title>
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Gleich">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Doto:wght@700;900&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root{--accent:#ffb000;
+    --bg:#000; --amber:var(--accent); --amber-dim:#a87400; --amber-dark:#4a3500; --amber-glow:rgba(255,176,0,.45);
+    --bar:#d6d6d6; --head:#2e2e2e; --line:#1c1c1c; --warn:#ff6a3d;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:#000;height:100%}
+  body{font-family:"VT323",ui-monospace,monospace;color:var(--amber);display:flex;justify-content:center;
+    -webkit-font-smoothing:none;font-size:20px;-webkit-tap-highlight-color:transparent}
+  .app{width:100%;max-width:440px;min-height:100vh;min-height:100dvh;background:var(--bg);display:flex;flex-direction:column;
+    padding-top:env(safe-area-inset-top);padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+  .glow{text-shadow:0 0 4px var(--amber-glow)}
+  [hidden]{display:none!important}
+  button{font:inherit;cursor:pointer;color:inherit}
+
+  /* Kopf */
+  header{display:flex;align-items:baseline;gap:12px;padding:14px 16px 10px}
+  header .menu{color:var(--amber);align-self:center;width:34px;height:34px;flex:none;background:none;border:2px solid var(--amber);border-radius:4px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;padding:0}
+  header .menu i{display:block;width:18px;height:3px;border-radius:2px;background:var(--amber);box-shadow:0 0 4px var(--amber-glow)}
+  header .date{margin-left:auto}
+  header .clock,header .date{font-size:min(32px,6.8vw);line-height:1;color:var(--amber);white-space:nowrap}
+  header .date{text-align:right}
+  .icon-btn{background:transparent;border:1px solid var(--amber-dim);color:var(--amber);border-radius:3px;width:38px;height:36px;display:grid;place-items:center;flex:none}
+
+  /* Leisten */
+  .bar{display:grid;grid-template-columns:58px 1fr auto;gap:0 6px;background:var(--bar);color:#111;padding:2px 10px;font-size:19px}
+  .bar span:last-child{text-align:right}
+  .bar.step{display:flex;justify-content:space-between}
+  .st-head{display:flex;align-items:center;gap:8px;background:var(--head);border-top:2px solid var(--amber);padding:5px 10px;font-size:18px}
+  .st-head .name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .st-head .dist{color:var(--amber-dim)}
+  .mini{background:none;border:1px solid var(--amber-dim);border-radius:999px;padding:0 8px;font-size:16px;color:var(--amber)}
+
+  main{flex:1;overflow-y:auto}
+  .pad{padding:14px 16px}
+  .label{color:var(--amber-dim);font-size:18px;margin:14px 0 6px}
+  .label:first-child{margin-top:0}
+  .hint{color:var(--amber-dim);font-size:18px;line-height:1.25}
+
+  /* Eingaben */
+  .row{display:flex;gap:8px;position:relative}
+  .field{flex:1;display:flex;align-items:center;border:1px solid var(--amber-dim);background:#0d0900;border-radius:3px}
+  .field input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:var(--amber);font:inherit;font-size:22px;padding:8px 10px}
+  .field input::placeholder{color:var(--accent);opacity:1}
+  .field:focus-within{border-color:var(--amber);box-shadow:0 0 6px var(--amber-glow)}
+  .suggest{position:absolute;top:100%;left:0;right:0;z-index:5;background:#120c00;border:1px solid var(--amber-dim);border-top:0;max-height:260px;overflow:auto}
+  .suggest button{display:block;width:100%;text-align:left;background:none;border:0;color:var(--amber);padding:7px 10px;font-size:19px;border-bottom:1px solid #2a1e00}
+  .suggest button:hover,.suggest button:focus{background:#2a1e00;outline:0}
+  .picked{margin-top:6px;font-size:17px;color:var(--amber-dim)}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .slider{display:flex;align-items:center;gap:14px}
+  .slider output{min-width:78px;text-align:right;font-size:26px}
+  input[type=range]{flex:1;-webkit-appearance:none;appearance:none;height:28px;background:transparent;--p:28%}
+  input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:linear-gradient(to right,var(--amber) var(--p),var(--amber-dark) var(--p))}
+  input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:var(--amber-dark)}
+  input[type=range]::-moz-range-progress{height:6px;border-radius:3px;background:var(--amber)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;margin-top:-9px;border-radius:50%;background:var(--amber);border:3px solid #000;box-shadow:0 0 0 1px var(--amber),0 0 8px var(--amber-glow)}
+  input[type=range]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:var(--amber);border:3px solid #000;box-shadow:0 0 0 1px var(--amber)}
+  .chip{background:transparent;border:1px solid var(--amber-dark);color:var(--amber-dim);border-radius:999px;padding:1px 12px;font-size:19px}
+  .chip[aria-pressed="true"]{border-color:var(--amber);color:#000;background:var(--amber)}
+  .chip:disabled{opacity:.3}
+
+  /* Stationsliste */
+  .pick{display:grid;grid-template-columns:28px 1fr auto;gap:2px 8px;align-items:center;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:9px 10px}
+  .box{width:18px;height:18px;border:2px solid var(--amber-dim);border-radius:2px;display:grid;place-items:center}
+  .pick[aria-pressed="true"] .box{border-color:var(--amber);background:var(--amber)}
+  .pick[aria-pressed="true"] .box::after{content:"";width:5px;height:9px;border:solid #000;border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px)}
+  .pick .nm{font-size:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pick .ds{color:var(--amber-dim);font-size:18px}
+  .pick .sub{grid-column:2/4;display:flex;gap:4px;flex-wrap:wrap;font-size:16px;color:var(--amber-dim)}
+  .badge{border:1px solid var(--amber-dark);border-radius:2px;padding:0 4px;line-height:1.15}
+  .badge.S{border-color:var(--amber-dim)}
+
+  /* Linienwahl */
+  .lines{display:flex;flex-wrap:wrap;gap:6px;padding:10px}
+  .lchip{min-width:50px;background:transparent;border:1px solid var(--amber-dark);color:var(--amber-dim);border-radius:3px;padding:2px 8px;font-size:21px;text-align:center}
+  .lchip[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:#2a1e00;text-shadow:0 0 4px var(--amber-glow)}
+  .grp{width:100%;font-size:16px;color:var(--amber-dim);margin-top:4px}
+  .grp:first-child{margin-top:0}
+
+  /* Tafel */
+  .station{margin-top:10px}
+  .dep{display:grid;grid-template-columns:58px 1fr auto;gap:0 6px;padding:5px 10px;font-size:22px;align-items:baseline}
+  .dep .ln,.dep .t{white-space:nowrap}
+  .dep .dir{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dep .t{text-align:right}
+  .dep .delay{color:var(--warn)}
+  .dep.cancel .dir,.dep.cancel .ln{text-decoration:line-through;opacity:.55}
+  .dep.cancel .t{color:var(--warn)}
+  @keyframes blink{to{opacity:.3}}
+  .ticker{overflow:hidden;white-space:nowrap;font-size:16px;color:var(--amber-dim);padding:0 0 2px}
+  .ticker span{display:inline-block;padding-left:100%;animation:scroll linear infinite}
+  @keyframes scroll{from{transform:translateX(0)}to{transform:translateX(-100%)}}
+  .empty{padding:6px 10px;color:var(--amber-dim);font-size:19px}
+  .msg{padding:40px 24px;text-align:center;color:var(--amber-dim);font-size:21px;line-height:1.3}
+  .msg b{color:var(--amber);font-weight:normal}
+  .demo{margin:0 10px 10px;border:1px dashed var(--amber-dim);padding:6px 10px;font-size:17px;color:var(--amber-dim);line-height:1.25}
+  .loading::after{content:"";animation:dots 1.2s steps(4) infinite}
+  @keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+
+  /* Fuß */
+  footer{position:sticky;bottom:0;background:var(--bg);border-top:2px solid var(--amber);padding:10px 16px calc(12px + env(safe-area-inset-bottom));text-align:center}
+  footer .handle{width:52px;height:4px;border-radius:3px;background:var(--amber);margin:0 auto 8px}
+  .actions{display:flex;gap:8px}
+  .btn{flex:1;background:var(--amber);color:#000;border:0;border-radius:3px;padding:7px 14px;font-size:22px}
+  .btn.ghost{flex:none;background:none;color:var(--amber);border:1px solid var(--amber-dim)}
+  .btn:disabled{background:var(--amber-dark);color:#000}
+  .link{background:none;border:0;color:var(--amber);font-size:21px}
+  .status{font-size:15px;color:#6b4c00;padding-top:4px}
+
+
+  /* ===== Nur Gelb auf Schwarz (einzige Ausnahme: grauer Schritt-Balken) ===== */
+  :root{--amber-dim:var(--accent);--amber-dark:var(--accent);--amber-glow:transparent;--head:#000;--line:#000;--warn:var(--accent)}
+  .glow,.lchip[aria-pressed="true"]{text-shadow:none}
+  .field,.suggest{background:#000}
+  .suggest button{border-bottom:1px solid var(--accent)}
+  .suggest button:hover,.suggest button:focus{background:var(--accent);color:#000}
+  .field:focus-within,.chip[aria-pressed="true"],input[type=range]::-webkit-slider-thumb{box-shadow:none}
+  input[type=range]::-webkit-slider-runnable-track{background:linear-gradient(to right,var(--accent) var(--p),#000 var(--p));border:1px solid var(--accent);height:8px}
+  input[type=range]::-moz-range-track{background:#000;border:1px solid var(--accent)}
+  input[type=range]::-webkit-slider-thumb{border-color:#000;margin-top:-9px}
+  .chip{color:var(--accent);border-color:var(--accent)}
+  .lchip{color:var(--accent);border-color:var(--accent)}
+  .lchip[aria-pressed="true"]{background:var(--accent);color:#000}
+  .pick{border-bottom:0}
+  .badge{border-color:var(--accent)}
+  .bar:not(.step){background:#000;color:var(--accent);border-bottom:2px solid var(--accent)}
+  .btn:disabled{background:#000;color:var(--accent);border:1px dashed var(--accent)}
+  .demo{border-color:var(--accent)}
+  header .menu i,footer .handle{box-shadow:none}
+  /* Einheitlicher linker/rechter Rand: alles bündig mit den Balken (10px) */
+  header{padding-left:10px;padding-right:10px}
+  .pad{padding-left:10px;padding-right:10px}
+  footer{padding-left:10px;padding-right:10px}
+  .st-head{font-size:19px}
+  /* Test: überall gleiche Schriftgröße */
+  .app, .app *{font-size:20px !important}
+  /* Alle/Keine und grauer Schritt-Balken eine Stufe kleiner */
+  .app .mini, .app .bar.step, .app .bar.step *{font-size:18px !important}
+  /* Variante A: keine Linie unter der Tafel-Kopfzeile */
+  .app .bar:not(.step){border-bottom:0}
+  /* Gleicher Abstand über und unter jeder gelben Linie (10px) */
+  .station{margin-top:0;padding-bottom:5px}
+  .st-head{padding-top:10px;padding-bottom:10px}
+  .pad{padding-bottom:10px}
+  #board{padding-top:10px;padding-bottom:5px !important}
+  .lines{padding-top:0;padding-bottom:10px}
+  footer{padding-top:10px}
+  .station{padding-bottom:0}
+  #board .st-head{padding-top:6px;padding-bottom:4px}
+  #board{padding-top:4px}
+  #v-address .pad{padding-bottom:6px}
+  #lnList{padding-top:10px}
+  /* Deckblatt */
+  #v-cover{flex:1;display:flex;flex-direction:column}
+  .cover{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:40px 10px}
+  .cover-icon{width:168px;height:168px;border-radius:36px;border:2px solid var(--accent)}
+  .app .cover-name{font-size:56px !important;line-height:1;color:var(--accent)}
+  footer.plain{border-top:0}
+  footer.plain .handle{display:none}
+  /* Vorschlag Schriftgrößen */
+  .app header .clock,.app header .date{font-size:20px !important}
+  .app .dep,.app .dep *{font-size:20px !important}
+  .app .st-head .name{font-size:20px !important}
+  .app #stCount{font-size:20px !important}
+  .app .bar,.app .bar *{font-size:18px !important}
+  .app .mini,.app .pick .sub,.app .pick .sub *,.app .demo{font-size:16px !important}
+  /* Einheitlichkeit */
+  .btn{border:1px solid transparent}
+  .btn.ghost{border-color:var(--accent)}
+  .chip{padding-top:2px;padding-bottom:2px}
+  .st-head:has(.mini){padding-top:8px}
+  .provider{display:flex;gap:10px;width:100%;max-width:260px;margin-top:8px}
+  .provider .btn{flex:1}
+  /* RMV-Farbschema: Türkis */
+  :root.rmv{--accent:#00b5b8}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <button class="menu" id="menu" type="button" title="Zurück zur Auswahl" aria-label="Zurück zur Auswahl" hidden><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"><path d="M20 12H5M11 5l-7 7 7 7"/></svg></button>
+    <div class="clock glow" id="clock">--:--</div>
+    <div class="date glow" id="date"></div>
+  </header>
+
+  <!-- Deckblatt -->
+  <section id="v-cover" class="view" hidden>
+    <main class="cover">
+      <img src="icon-bvg-512.png" alt="" class="cover-icon" id="coverIcon">
+      <div class="cover-name">Gleich</div>
+      <div class="provider" id="provider">
+        <button type="button" class="btn" data-prov="bvg">BVG</button>
+        <button type="button" class="btn ghost" data-prov="rmv">RMV</button>
+      </div>
+    </main>
+  </section>
+
+  <!-- Schritt 1: Adresse + Radius -->
+  <section id="v-address" class="view" hidden>
+    <div class="bar step"><span>Schritt 1 von 3</span></div>
+    <main class="pad">
+      <form id="addrForm" autocomplete="off">
+        <div class="row">
+          <label class="field"><input id="addr" type="text" placeholder="Adresse eingeben" enterkeyhint="search" aria-label="Adresse"></label>
+          <button type="button" class="icon-btn" id="locate" style="height:auto;width:44px" title="Mein Standort" aria-label="Mein Standort">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+          </button>
+          <div class="suggest" id="suggest" hidden></div>
+        </div>
+        <div class="picked" id="picked"></div>
+        <div class="label">Radius</div>
+        <div class="slider">
+          <input type="range" id="radius" min="100" max="2000" step="50" value="500" aria-label="Radius in Metern">
+          <output id="radiusOut" class="glow">500 m</output>
+        </div>
+      </form>
+    </main>
+  </section>
+
+  <!-- Schritt 2: Stationen -->
+  <section id="v-stations" class="view" hidden>
+    <div class="bar step"><span>Schritt 2 von 3</span></div>
+    <main>
+      <div class="pad">
+        <div class="label">Verkehrsmittel</div>
+        <div class="chips" id="products"></div>
+      </div>
+      <div class="st-head"><span class="name glow" id="stCount">Stationen in der Nähe</span><button class="mini" id="stAll" type="button">Alle</button><button class="mini" id="stNone" type="button">Keine</button></div>
+      <div id="stList"></div>
+    </main>
+  </section>
+
+  <!-- Schritt 3: Linien -->
+  <section id="v-lines" class="view" hidden>
+    <div class="bar step"><span>Schritt 3 von 3</span></div>
+    <main id="lnList"></main>
+  </section>
+
+  <!-- Tafel -->
+  <section id="v-board" class="view" hidden>
+    <div class="demo" id="demoNote" hidden>DEMO-MODUS – Hier sind keine Live-Daten erreichbar. Auf dem Handy installiert zeigt die App echte BVG-Abfahrten.</div>
+    <div class="bar"><span>Linie</span><span></span><span>Abfahrt in</span></div>
+    <main id="board" style="padding-bottom:20px"></main>
+  </section>
+
+  <footer>
+    <div class="handle"></div>
+    <div class="actions" id="actions"></div>
+  </footer>
+</div>
+
+<script>
+(() => {
+  const API = "https://v6.bvg.transport.rest";
+  const REFRESH_MS = 30000, DEPS_PER_STOP = 6, DURATION = 60;
+  const PRODUCTS = [
+    ["suburban","S"],["subway","U"],["tram","Tram"],["bus","Bus"]
+  ];
+  const PRODUCT_ORDER = PRODUCTS.map(p => p[0]);
+
+  const $ = s => document.querySelector(s);
+  const store = {
+    get(k, d){ try{ const v = localStorage.getItem("gleich:"+k); return v==null?d:JSON.parse(v);}catch{ return d; } },
+    set(k, v){ try{ localStorage.setItem("gleich:"+k, JSON.stringify(v)); }catch{} }
+  };
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const cleanName = n => String(n||"").replace(/\s*\(Berlin\)/g,"").replace(/\s*\[.*?\]/g,"").trim();
+  const normProduct = p => p === "express" ? "regional" : p;
+  const ALLOWED = new Set(["suburban","subway","tram","bus"]);
+  const fmtDist = m => m == null ? "" : m >= 1000 ? (m/1000).toFixed(1).replace(".",",") + " km" : Math.round(m) + " m";
+
+  const tick = () => {
+    const now = new Date();
+    $("#clock").textContent = now.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"});
+    const wd = ["So","Mo","Di","Mi","Do","Fr","Sa"][now.getDay()];
+    $("#date").textContent = wd + ", " + now.toLocaleDateString("de-DE",{day:"2-digit", month:"2-digit", year:"numeric"});
+  };
+  tick(); setInterval(tick, 1000);
+
+  // Gespeicherte Einrichtung: {place, radius, products, stations:[{key,name,ids,distance,lat,lon}], lines:{key:[lineName]}}
+  let config = store.get("config", null);
+  const draft = {
+    place: config?.place || null,
+    radius: config?.radius || 500,
+    products: (config?.products || ["suburban","subway","tram","bus"]).filter(p => ["suburban","subway","tram","bus"].includes(p)),
+    found: [],                                   // Stationen im Radius
+    selected: new Set(),
+    lines: {}
+  };
+  function structuredCloneSafe(o){ return JSON.parse(JSON.stringify(o)); }
+  let demo = false, boardTimer = null, lastBoard = null;
+
+  // ---------- API ----------
+  async function api(path, params){
+    if(demo || provider === "rmv") throw new Error("demo");
+    const url = API + path + (params ? "?" + new URLSearchParams(params) : "");
+    const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 12000);
+    try{
+      const r = await fetch(url, {signal: ctrl.signal, headers:{accept:"application/json"}});
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      return await r.json();
+    } finally { clearTimeout(to); }
+  }
+  const depsOf = v => Array.isArray(v) ? v : (v && v.departures) || [];
+
+  // ---------- Ansichten ----------
+  function show(view){
+    document.querySelectorAll(".view").forEach(v => v.hidden = v.id !== "v-" + view);
+    
+    if(view !== "board"){ clearTimeout(boardTimer); }
+    $("#menu").hidden = true;
+    document.querySelector("footer").classList.toggle("plain", view === "cover");
+    ({cover: footCover, address: footAddress, stations: footStations, lines: footLines, board: footBoard})[view]();
+    window.scrollTo(0,0);
+    currentView = view; saveSession();
+  }
+  // Letzte Ansicht und Auswahl merken – auch nach dem Schließen der App
+  let currentView = "cover";
+  function saveSession(){
+    store.set("session", {
+      view: currentView, demo, addr: $("#addr").value,
+      draft: { place: draft.place, radius: draft.radius, products: draft.products, found: draft.found,
+               selected: [...draft.selected], lines: draft.lines }
+    });
+  }
+  const saveSoon = () => setTimeout(saveSession, 0);
+  document.addEventListener("click", saveSoon);
+  document.addEventListener("input", saveSoon);
+  document.addEventListener("visibilitychange", () => { if(document.hidden) saveSession(); });
+  window.addEventListener("pagehide", saveSession);
+  function actions(html){ $("#actions").innerHTML = html; }
+
+  // ---------- Schritt 1 ----------
+  function syncRadius(){
+    const r = $("#radius"); r.value = draft.radius;
+    $("#radiusOut").textContent = fmtDist(draft.radius);
+    r.style.setProperty("--p", ((draft.radius - r.min) / (r.max - r.min) * 100) + "%");
+  }
+  $("#radius").addEventListener("input", e => { draft.radius = +e.target.value; syncRadius(); });
+  let provider = store.get("provider", "bvg");
+  function syncProvider(){
+    document.querySelectorAll("#provider .btn").forEach(b => b.classList.toggle("ghost", b.dataset.prov !== provider));
+    $("#coverIcon").src = provider === "rmv" ? "icon-rmv-512.png" : "icon-bvg-512.png";
+    document.documentElement.classList.toggle("rmv", provider === "rmv");
+    const tc = document.querySelector('meta[name="theme-color"]'); if(tc) tc.content = "#000000";
+  }
+  $("#provider").addEventListener("click", e => {
+    const b = e.target.closest("[data-prov]"); if(!b) return;
+    provider = b.dataset.prov; store.set("provider", provider); syncProvider();
+  });
+  syncProvider();
+  function footCover(){
+    actions(`<button class="btn" id="startBtn">Start</button>`);
+    $("#startBtn").onclick = () => show("address");
+  }
+  function footAddress(){
+    syncRadius();
+    if(draft.place){ $("#addr").value = draft.place.label; $("#picked").textContent = ""; }
+    actions(`<button class="btn ghost" id="backCover">Zurück</button><button class="btn" id="toStations">Stationen suchen</button>`);
+    $("#toStations").onclick = submitAddress;
+    $("#backCover").onclick = () => show("cover");
+  }
+  $("#addrForm").addEventListener("submit", e => { e.preventDefault(); submitAddress(); });
+
+  let sugTimer, sugSeq = 0, chosen = null;
+  const sug = $("#suggest");
+  $("#addr").addEventListener("input", e => {
+    chosen = null; clearTimeout(sugTimer);
+    const q = e.target.value.trim();
+    if(q.length < 3 || demo){ sug.hidden = true; return; }
+    sugTimer = setTimeout(async () => {
+      const seq = ++sugSeq;
+      try{
+        const res = await api("/locations", {query:q, results:6, addresses:true, stops:true, poi:false, fuzzy:true});
+        if(seq !== sugSeq) return;
+        const list = res.map(toPlace).filter(Boolean);
+        if(!list.length){ sug.hidden = true; return; }
+        sug.innerHTML = list.map((p,i) => `<button type="button" data-i="${i}">${p.stop ? "Ⓗ " : "⌂ "}${esc(p.label)}</button>`).join("");
+        sug.hidden = false;
+        sug.onclick = ev => { const b = ev.target.closest("button"); if(!b) return; chosen = list[+b.dataset.i]; $("#addr").value = chosen.label; sug.hidden = true; };
+      }catch{ sug.hidden = true; }
+    }, 300);
+  });
+  document.addEventListener("click", e => { if(!e.target.closest(".row")) sug.hidden = true; });
+  function toPlace(l){
+    const loc = l.location || l;
+    if(loc.latitude == null) return null;
+    return { label: cleanName(l.name || l.address), lat: loc.latitude, lon: loc.longitude, stop: l.type === "stop" };
+  }
+
+  $("#locate").addEventListener("click", () => {
+    if(!navigator.geolocation){ $("#picked").textContent = "Standort ist hier nicht verfügbar."; return; }
+    $("#picked").innerHTML = '<span class="loading">Bestimme Standort</span>';
+    navigator.geolocation.getCurrentPosition(
+      pos => { chosen = {label:"Mein Standort", lat:pos.coords.latitude, lon:pos.coords.longitude}; $("#addr").value = chosen.label; $("#picked").textContent = "Standort gefunden ✓"; },
+      () => { $("#picked").textContent = "Standort nicht freigegeben – gib eine Adresse ein."; },
+      {enableHighAccuracy:true, timeout:10000, maximumAge:60000}
+    );
+  });
+
+  async function submitAddress(){
+    demo = false;
+    sug.hidden = true;
+    const q = $("#addr").value.trim();
+    if(!q){ $("#picked").textContent = "Bitte eine Adresse eingeben."; return; }
+    const btn = $("#toStations"); btn.disabled = true; btn.innerHTML = '<span class="loading">Suche</span>';
+    try{
+      let place = chosen && chosen.label === q ? chosen : (draft.place && draft.place.label === q ? draft.place : null);
+      if(!place){
+        const res = await api("/locations", {query:q, results:1, addresses:true, stops:true, poi:true, fuzzy:true});
+        place = res.map(toPlace).filter(Boolean)[0];
+        if(!place){ $("#picked").textContent = "Adresse nicht gefunden. Versuch Straße + Hausnummer."; btn.disabled = false; btn.textContent = "Stationen suchen"; return; }
+      }
+      draft.place = place;
+      const raw = await api("/locations/nearby", {latitude:place.lat, longitude:place.lon, distance:draft.radius, results:80, stops:true, poi:false, linesOfStops:true});
+      draft.found = mergeStops(raw.filter(s => s.type === "stop" || s.type === "station"));
+      draft.selected.clear(); draft.lines = {};
+    }catch(err){
+      startDemo(q); draft.selected.clear(); draft.lines = {};
+    }
+    show("stations"); renderStations();
+  }
+
+  // Gleichnamige Bahnsteige (z. B. S- und U-Bahnhof) zu einer Station zusammenfassen
+  function mergeStops(stops){
+    const map = new Map();
+    for(const s of stops){
+      const name = cleanName(s.name), key = name.toLowerCase();
+      const loc = s.location || s;
+      const lines = (s.lines || []).map(l => ({name:l.name, product:normProduct(l.product)})).filter(l => l.name && ALLOWED.has(l.product));
+      const prods = Object.entries(s.products || {}).filter(([,v]) => v).map(([k]) => normProduct(k)).filter(p => ALLOWED.has(p));
+      if(!map.has(key)) map.set(key, {key, name, ids:[], distance:s.distance, lat:loc.latitude, lon:loc.longitude, lines:[], products:new Set()});
+      const m = map.get(key);
+      m.ids.push(s.id); m.distance = Math.min(m.distance ?? Infinity, s.distance ?? Infinity);
+      lines.forEach(l => { if(!m.lines.some(x => x.name === l.name)) m.lines.push(l); });
+      prods.forEach(p => m.products.add(p)); lines.forEach(l => m.products.add(l.product));
+    }
+    return [...map.values()].map(m => ({...m, products:[...m.products]})).filter(m => m.products.length || m.lines.length).sort((a,b) => a.distance - b.distance);
+  }
+
+  // ---------- Schritt 2 ----------
+  function stationVisible(st){ return st.products.length === 0 || st.products.some(p => draft.products.includes(p)); }
+  function renderStations(){
+    const present = new Set(draft.found.flatMap(s => s.products));
+    $("#products").innerHTML = PRODUCTS.filter(([p]) => !present.size || present.has(p)).map(([p,label]) =>
+      `<button type="button" class="chip" data-p="${p}" aria-pressed="${draft.products.includes(p)}">${label}</button>`).join("");
+    const vis = draft.found.filter(stationVisible);
+    $("#stCount").textContent = `${vis.length} Stationen · ${fmtDist(draft.radius)}`;
+    if(!draft.found.length){
+      $("#stList").innerHTML = `<div class="msg">Keine Haltestellen im Umkreis.<br>Geh zurück und vergrößere den <b>Radius</b>.</div>`;
+    } else if(!vis.length){
+      $("#stList").innerHTML = `<div class="msg">Keine Station mit diesen Verkehrsmitteln.</div>`;
+    } else {
+      $("#stList").innerHTML = vis.map(st => {
+        const lines = st.lines.filter(l => draft.products.includes(l.product));
+        return `<button type="button" class="pick" data-k="${esc(st.key)}" aria-pressed="${draft.selected.has(st.key)}">
+          <span class="box"></span><span class="nm glow">${esc(st.name)}</span><span class="ds">${fmtDist(st.distance)}</span>
+          <span class="sub">${lines.length ? sortLines(lines).slice(0,14).map(l => `<span class="badge">${esc(l.name)}</span>`).join("") + (lines.length > 14 ? `<span>+${lines.length-14}</span>` : "") : "Linien werden später geladen"}</span>
+        </button>`;
+      }).join("");
+    }
+    footStations();
+  }
+  $("#products").addEventListener("click", e => {
+    const b = e.target.closest(".chip"); if(!b || b.disabled) return;
+    const p = b.dataset.p, i = draft.products.indexOf(p);
+    if(i >= 0){ if(draft.products.length > 1) draft.products.splice(i,1); } else draft.products.push(p);
+    renderStations();
+  });
+  $("#stList").addEventListener("click", e => {
+    const b = e.target.closest(".pick"); if(!b) return;
+    const k = b.dataset.k;
+    draft.selected.has(k) ? draft.selected.delete(k) : draft.selected.add(k);
+    b.setAttribute("aria-pressed", draft.selected.has(k)); footStations();
+  });
+  $("#stAll").addEventListener("click", () => {
+    draft.found.filter(stationVisible).forEach(s => draft.selected.add(s.key));
+    renderStations();
+  });
+  $("#stNone").addEventListener("click", () => { draft.selected.clear(); renderStations(); });
+  function selectedStations(){ return draft.found.filter(s => draft.selected.has(s.key) && stationVisible(s)); }
+  function footStations(){
+    {
+      const n = selectedStations().length;
+      actions(`<button class="btn ghost" id="back1">Zurück</button><button class="btn" id="toLines" ${n ? "" : "disabled"}>Weiter</button>`);
+      $("#back1").onclick = () => show("address");
+      $("#toLines").onclick = gotoLines;
+    }
+  }
+
+  // ---------- Schritt 3 ----------
+  async function gotoLines(){
+    const sts = selectedStations();
+    const missing = sts.filter(s => !s.lines.length);
+    if(missing.length && !demo){
+      $("#toLines").disabled = true; $("#toLines").innerHTML = '<span class="loading">Lade Linien</span>';
+      await Promise.allSettled(missing.map(async st => {
+        const res = await Promise.allSettled(st.ids.map(id => api(`/stops/${encodeURIComponent(id)}/departures`, {duration:240, results:80, remarks:false})));
+        res.forEach(r => { if(r.status === "fulfilled") depsOf(r.value).forEach(d => {
+          if(d.line && ALLOWED.has(normProduct(d.line.product)) && !st.lines.some(l => l.name === d.line.name)) st.lines.push({name:d.line.name, product:normProduct(d.line.product)});
+        }); });
+        st.products = [...new Set([...st.products, ...st.lines.map(l => l.product)])];
+      }));
+    }
+    // Neue Stationen: alle passenden Linien vorauswählen
+    for(const st of sts){
+      if(!draft.lines[st.key]) draft.lines[st.key] = [];
+    }
+    show("lines");
+    renderLines();
+  }
+  function sortLines(ls){
+    return [...ls].sort((a,b) => (PRODUCT_ORDER.indexOf(a.product) - PRODUCT_ORDER.indexOf(b.product)) || a.name.localeCompare(b.name, "de", {numeric:true}));
+  }
+  function renderLines(){
+    const sts = selectedStations();
+    $("#lnList").innerHTML = sts.map(st => {
+      const lines = sortLines(st.lines.filter(l => draft.products.includes(l.product)));
+      const sel = new Set(draft.lines[st.key] || []);
+      let body = "", last = null;
+      for(const l of lines){
+        if(l.product !== last){ body += `<div class="grp">${PRODUCTS.find(p => p[0] === l.product)?.[1] || ""}</div>`; last = l.product; }
+        body += `<button type="button" class="lchip" data-k="${esc(st.key)}" data-l="${esc(l.name)}" aria-pressed="${sel.has(l.name)}">${esc(l.name)}</button>`;
+      }
+      return `<section class="station"><div class="st-head"><span class="name glow">${esc(st.name)}</span>
+        <button class="mini" type="button" data-all="${esc(st.key)}">Alle</button><button class="mini" type="button" data-none="${esc(st.key)}">Keine</button></div>
+        <div class="lines">${body || '<span class="empty">Keine Linien gefunden.</span>'}</div></section>`;
+    }).join("");
+    footLines();
+  }
+  $("#lnList").addEventListener("click", e => {
+    const c = e.target.closest(".lchip");
+    if(c){
+      const k = c.dataset.k, l = c.dataset.l;
+      const turnOn = !(draft.lines[k] || []).includes(l);
+      setLineEverywhere(l, turnOn);
+      renderLines(); return;
+    }
+    const a = e.target.closest("[data-all],[data-none]"); if(!a) return;
+    const k = a.dataset.all || a.dataset.none, st = draft.found.find(s => s.key === k);
+    st.lines.filter(l => draft.products.includes(l.product)).forEach(l => setLineEverywhere(l.name, !!a.dataset.all));
+    renderLines();
+  });
+  // Gleiche Linie an allen gewählten Stationen gemeinsam an- bzw. abwählen
+  function setLineEverywhere(name, on){
+    for(const st of selectedStations()){
+      if(!st.lines.some(l => l.name === name)) continue;
+      const arr = draft.lines[st.key] || (draft.lines[st.key] = []);
+      const i = arr.indexOf(name);
+      if(on && i < 0) arr.push(name);
+      if(!on && i >= 0) arr.splice(i,1);
+    }
+  }
+  function footLines(){
+    const n = selectedStations().reduce((acc, st) => acc + (draft.lines[st.key] || []).length, 0);
+    actions(`<button class="btn ghost" id="back2">Zurück</button><button class="btn" id="finish" ${n ? "" : "disabled"}>Fahrplan anzeigen</button>`);
+    $("#back2").onclick = () => { show("stations"); renderStations(); };
+    $("#finish").onclick = finish;
+  }
+  function finish(){
+    const sts = selectedStations().filter(st => (draft.lines[st.key] || []).length);
+    config = {
+      place: draft.place, radius: draft.radius, products: [...draft.products],
+      stations: sts.map(({key,name,ids,distance,lat,lon,lines}) => ({key,name,ids,distance,lat,lon,lines})),
+      lines: Object.fromEntries(sts.map(st => [st.key, draft.lines[st.key]])),
+      found: draft.found.map(({key,name,ids,distance,lat,lon,lines,products}) => ({key,name,ids,distance,lat,lon,lines,products})),
+      selected: [...draft.selected],
+      allLines: structuredCloneSafe(draft.lines),
+      demo
+    };
+    store.set("config", config);
+    lastBoard = null;
+    show("board"); loadBoard();
+  }
+  function restoreDraftFromConfig(){
+    draft.place = config.place; draft.radius = config.radius; draft.products = [...config.products];
+    draft.found = (config.found || config.stations.map(s => ({...s, products:[...new Set((s.lines||[]).map(l => l.product))]})))
+      .map(s => ({...s, lines:[...(s.lines||[])], products:[...(s.products||[])]}));
+    draft.selected = new Set(config.selected || config.stations.map(s => s.key));
+    draft.lines = structuredCloneSafe(config.allLines || config.lines);
+  }
+  function resetDraftFromConfig(){
+    draft.place = config.place; draft.radius = config.radius; draft.products = [...config.products];
+    draft.selected = new Set(); draft.lines = {};
+  }
+
+  // ---------- Tafel ----------
+  function footBoard(){
+    actions(`<button class="btn ghost" id="backBoard">Zurück</button>`);
+    $("#backBoard").onclick = backFromBoard;
+  }
+  $("#menu").addEventListener("click", backFromBoard);
+  function backFromBoard(){
+    restoreDraftFromConfig();
+    show("lines"); renderLines();
+  }
+  async function openSetup(){
+    resetDraftFromConfig();
+    show("address");
+  }
+
+  async function loadBoard(){
+    clearTimeout(boardTimer);
+    if(!config) return;
+    if(!lastBoard) $("#board").innerHTML = `<div class="msg"><span class="loading">Lade Abfahrten</span></div>`;
+    if(demo){ lastBoard = demoBoard(); renderBoard(lastBoard); boardTimer = setTimeout(loadBoard, 15000); return; }
+    try{
+      const results = await Promise.all(config.stations.map(async st => {
+        const res = await Promise.allSettled(st.ids.map(id => api(`/stops/${encodeURIComponent(id)}/departures`, {duration:DURATION, results:40, remarks:true, linesOfStops:false})));
+        const ok = res.filter(r => r.status === "fulfilled");
+        if(!ok.length) return {st, deps:null};
+        const seen = new Set(), deps = [];
+        ok.forEach(r => depsOf(r.value).forEach(d => { const k = d.tripId || (d.line?.name + d.plannedWhen + d.direction); if(!seen.has(k)){ seen.add(k); deps.push(d); } }));
+        return {st, deps};
+      }));
+      if(results.every(r => r.deps === null) && !lastBoard) throw new Error("offline");
+      lastBoard = results; renderBoard(results);
+      
+    }catch{
+      if(lastBoard) renderBoard(lastBoard);
+      else $("#board").innerHTML = `<div class="msg">Keine Verbindung zur BVG.<br>Neuer Versuch in 30 s.</div>`;
+      
+    }
+    boardTimer = setTimeout(loadBoard, REFRESH_MS);
+  }
+  document.addEventListener("visibilitychange", () => { if(!document.hidden && !$("#v-board").hidden) loadBoard(); });
+
+  const mins = d => { const t = d.when || d.plannedWhen; return t ? Math.round((new Date(t) - Date.now()) / 60000) : null; };
+  function timeLabel(d){
+    const m = mins(d);
+    if(m == null) return "–"; if(m <= 0) return "Jetzt";
+    if(m >= 60) return new Date(d.when || d.plannedWhen).toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"});
+    return m + " min";
+  }
+  function remarksText(d){
+    const r = (d.remarks || []).filter(x => x.type === "warning" || (x.type === "hint" && /barriere|fahrrad|aufzug|treppe|ersatz/i.test(x.text||"")));
+    const t = [...new Set(r.map(x => (x.summary || x.text || "").replace(/<[^>]+>/g,"").trim()).filter(Boolean))].slice(0,3);
+    return t.length ? t.join("  ***  ") + "  ***" : "";
+  }
+  function renderBoard(results){
+    $("#demoNote").hidden = !demo;
+    $("#demoNote").textContent = provider === "rmv"
+      ? "DEMO-MODUS – Beispieldaten aus Frankfurt. Echte RMV-Abfahrten folgen, sobald dein Zugangsschlüssel eingetragen ist."
+      : "DEMO-MODUS – Hier sind keine Live-Daten erreichbar. Auf dem Handy installiert zeigt die App echte BVG-Abfahrten.";
+    let html = "";
+    for(const {st, deps} of results){
+      const want = new Set(config.lines[st.key] || []);
+      html += `<section class="station"><div class="st-head"><span class="name glow">${esc(st.name)}</span></div>`;
+      if(deps === null){ html += `<div class="empty">Abfahrten gerade nicht verfügbar.</div></section>`; continue; }
+      const list = deps.filter(d => d.line && want.has(d.line.name) && !d.cancelled)
+        .filter(d => { const m = mins(d); return m == null || m >= -1; })
+        .sort((a,b) => new Date(a.when||a.plannedWhen) - new Date(b.when||b.plannedWhen))
+        .slice(0, DEPS_PER_STOP);
+      if(!list.length) html += `<div class="empty">Keine Abfahrten deiner Linien in den nächsten ${DURATION} min.</div>`;
+      for(const d of list){
+        const m = mins(d), delay = d.delay ? Math.round(d.delay/60) : 0;
+        html += `<div class="dep"><span class="ln glow">${esc(d.line.name)}</span>
+          <span class="dir glow">${esc(cleanName(d.direction))}</span>
+          <span class="t glow${m != null && m <= 0 ? " now" : ""}">${esc(timeLabel(d))}${delay > 0 ? ` <span class="delay">(+${delay})</span>` : ""}</span></div>`;
+      }
+      html += `</section>`;
+    }
+    $("#board").innerHTML = html;
+  }
+
+  // ---------- Demo (wenn die BVG-Schnittstelle nicht erreichbar ist) ----------
+  const L = (name, product) => ({name, product});
+  const DEMO = [
+    {key:"u kaiserin-augusta-str.", name:"U Kaiserin-Augusta-Str.", ids:["d1"], distance:180, lat:52.4604, lon:13.3846,
+      lines:[L("U6","subway"),L("184","bus"),L("N6","bus")]},
+    {key:"s+u hermannstr.", name:"S+U Hermannstr.", ids:["d2"], distance:420, lat:52.4673, lon:13.4317,
+      lines:[L("S41","suburban"),L("S42","suburban"),L("S45","suburban"),L("S46","suburban"),L("S47","suburban"),L("U8","subway"),L("M44","bus"),L("246","bus"),L("370","bus")]},
+    {key:"mohriner allee", name:"Mohriner Allee", ids:["d3"], distance:880, lat:52.4512, lon:13.4320, lines:[L("M27","tram"),L("370","bus")]},
+    {key:"s neukölln", name:"S+U Neukölln", ids:["d4"], distance:1350, lat:52.4693, lon:13.4422, lines:[L("S41","suburban"),L("S42","suburban"),L("U7","subway")]},
+  ];
+  const DEMO_RMV = [
+    {key:"willy-brandt-platz", name:"Willy-Brandt-Platz", ids:["f1"], distance:150, lat:50.1092, lon:8.6734,
+      lines:[L("U1","subway"),L("U2","subway"),L("U3","subway"),L("U4","subway"),L("U5","subway"),L("U8","subway"),L("11","tram"),L("12","tram")]},
+    {key:"dom/römer", name:"Dom/Römer", ids:["f2"], distance:420, lat:50.1105, lon:8.6829,
+      lines:[L("U4","subway"),L("U5","subway"),L("11","tram"),L("12","tram")]},
+    {key:"hauptwache", name:"Hauptwache", ids:["f3"], distance:780, lat:50.1140, lon:8.6790,
+      lines:[L("S1","suburban"),L("S2","suburban"),L("S3","suburban"),L("S4","suburban"),L("S5","suburban"),L("S6","suburban"),L("S8","suburban"),L("S9","suburban"),
+             L("U1","subway"),L("U2","subway"),L("U3","subway"),L("U6","subway"),L("U7","subway"),L("U8","subway")]},
+    {key:"konstablerwache", name:"Konstablerwache", ids:["f4"], distance:1250, lat:50.1146, lon:8.6866,
+      lines:[L("S1","suburban"),L("S2","suburban"),L("S3","suburban"),L("S4","suburban"),L("S5","suburban"),L("S6","suburban"),L("S8","suburban"),L("S9","suburban"),
+             L("U4","subway"),L("U5","subway"),L("U6","subway"),L("U7","subway"),L("12","tram")]},
+  ];
+  function startDemo(label){
+    demo = true;
+    const rmv = provider === "rmv";
+    draft.place = (draft.place && !rmv) ? draft.place : {label, lat: rmv ? 50.1092 : 52.467, lon: rmv ? 8.6734 : 13.431};
+    draft.found = (rmv ? DEMO_RMV : DEMO).filter(s => s.distance <= draft.radius).map(s => ({...s, lines:[...s.lines], products:[...new Set(s.lines.map(l => l.product))]}));
+  }
+  function demoBoard(){
+    const at = m => new Date(Date.now() + m*60000).toISOString();
+    const pool = {
+      d1:[["184","S+U Tempelhof",0],["U6","Alt-Mariendorf",0.3,["Fahrradmitnahme möglich","barrierefrei"]],["184","Lichterfelde, Oberhofer Platz",3,null,120],
+          ["U6","Kurt-Schumacher-Platz",3,["Aufzug im Bahnhof außer Betrieb","Zugang über Treppe"]],["U6","Alt-Mariendorf",8],["184","S+U Tempelhof",12]],
+      d2:[["S42","Ringbahn",0],["U8","Paracelsus-Bad",2],["S46","S Königs Wusterhausen",2],["S41","Ringbahn",4],["M44","Alt-Buckow",6,null,0,true],["U8","Wittenau",7],["S45","Flughafen BER",9]],
+      d3:[["M27","S+U Pankow",4],["370","U Britz-Süd",11],["M27","S Schöneweide",14]],
+      d4:[["U7","Rudow",1],["S41","Ringbahn",3]],
+      f1:[["U4","Bockenheimer Warte",0],["U1","Ginnheim",2],["U5","Preungesheim",3],["11","Fechenheim Schießhüttenstraße",4],
+          ["U8","Riedberg",6],["12","Schwanheim Rheinlandstraße",7,null,120],["U2","Bad Homburg-Gonzenheim",9],["U3","Oberursel-Hohemark",11]],
+      f2:[["12","Fechenheim Hugo-Junkers-Straße",1],["U5","Hauptbahnhof",3],["11","Höchst Zuckschwerdtstraße",5],["U4","Enkheim",8]],
+      f3:[["S8","Wiesbaden Hbf",1],["U6","Heerstraße",2],["S3","Bad Soden",3],["U1","Südbahnhof",4],["U7","Hausen",5],["S5","Friedrichsdorf",6,null,180],["U3","Oberursel-Hohemark",8]],
+      f4:[["S1","Rödermark-Ober-Roden",2],["U4","Enkheim",3],["S6","Friedberg",5],["12","Fechenheim Hugo-Junkers-Straße",7],["U7","Enkheim",9]]
+    };
+    return config.stations.map(st => ({st, deps:(pool[st.ids[0]] || []).map(([n,dir,m,rem,delay,cancel]) => ({
+      line:{name:n}, direction:dir, when:at(m), delay, cancelled:cancel, remarks:(rem||[]).map(t => ({type:"warning",text:t}))
+    }))}));
+  }
+
+  // ---------- Start ----------
+  const sess = store.get("session", null);
+  if(sess && sess.view){
+    demo = !!sess.demo;
+    if(sess.draft){
+      Object.assign(draft, sess.draft);
+      draft.selected = new Set(sess.draft.selected || []);
+      draft.lines = sess.draft.lines || {};
+      draft.found = sess.draft.found || [];
+    }
+    $("#addr").value = sess.addr || "";
+    const v = sess.view;
+    if(v === "board" && config && config.stations?.length){ demo = !!config.demo; show("board"); loadBoard(); }
+    else if(v === "stations" && draft.found.length){ show("stations"); renderStations(); }
+    else if(v === "lines" && draft.found.length){ show("lines"); renderLines(); }
+    else if(v === "address"){ show("address"); $("#addr").value = sess.addr || ""; }
+    else show("cover");
+  }
+  else if(config && config.stations?.length){ demo = !!config.demo; show("board"); loadBoard(); }
+  else show("cover");
+
+  if("serviceWorker" in navigator){
+    try{ navigator.serviceWorker.register("sw.js").catch(() => {}); }catch{}
+  }
+})();
+</script>
+</body>
+</html>
