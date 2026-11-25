@@ -671,10 +671,10 @@
         .slice(0, DEPS_PER_STOP);
       if(!list.length) html += `<div class="empty">Keine Abfahrten deiner Linien in den nächsten ${DURATION} min.</div>`;
       for(const d of list){
-        const m = mins(d), delay = d.delay ? Math.round(d.delay/60) : 0;
+        const m = mins(d);
         html += `<div class="dep"><span class="ln glow">${esc(d.line.name)}</span>
           <span class="dir glow">${esc(cleanName(d.direction))}</span>
-          <span class="t glow${m != null && m <= 0 ? " now" : ""}">${esc(timeLabel(d))}${delay > 0 ? ` <span class="delay">(+${delay})</span>` : ""}</span></div>`;
+          <span class="t glow${m != null && m <= 0 ? " now" : ""}">${esc(timeLabel(d))}</span></div>`;
       }
       html += `</section>`;
     }
