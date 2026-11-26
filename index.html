@@ -200,6 +200,7 @@
   .dline{padding-top:3px}
   .dopts{display:flex;flex-wrap:wrap;gap:6px}
   .dchip{min-width:0;text-align:left}
+  .keyfield{width:100%;max-width:260px}
 </style>
 </head>
 <body>
@@ -219,6 +220,7 @@
         <button type="button" class="btn" data-prov="bvg">BVG</button>
         <button type="button" class="btn ghost" data-prov="rmv">RMV</button>
       </div>
+      <label class="field keyfield" id="rmvKeyBox" hidden><input id="rmvKey" type="text" placeholder="RMV-Schlüssel eingeben" autocomplete="off" spellcheck="false"></label>
     </main>
   </section>
 
@@ -297,7 +299,7 @@
     set(k, v){ try{ localStorage.setItem("gleich:"+k, JSON.stringify(v)); }catch{} }
   };
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-  const cleanName = n => String(n||"").replace(/\s*\(Berlin\)/g,"").replace(/\s*\[.*?\]/g,"").trim();
+  const cleanName = n => String(n||"").replace(/\s*\(Berlin\)/g,"").replace(/^Frankfurt \(Main\)\s*(-\s*)?/,"").replace(/\s*\[.*?\]/g,"").trim();
   const normProduct = p => p === "express" ? "regional" : p;
   const ALLOWED = new Set(["suburban","subway","tram","bus"]);
   const fmtDist = m => m == null ? "" : m >= 1000 ? (m/1000).toFixed(1).replace(".",",") + " km" : Math.round(m) + " m";
@@ -324,8 +326,11 @@
   let demo = false, boardTimer = null, lastBoard = null;
 
   // ---------- API ----------
+  // Vorschau auf claude.ai: dort sind fremde Server gesperrt -> Demo
+  const isPreview = location.protocol !== "file:" && !/(\.github\.io|^localhost|^127\.0\.0\.1)$/.test(location.hostname);
   async function api(path, params){
-    if(demo || provider === "rmv") throw new Error("demo");
+    if(demo) throw new Error("demo");
+    if(provider === "rmv"){ if(isPreview) throw new Error("demo"); return rmvApi(path, params); }
     const url = API + path + (params ? "?" + new URLSearchParams(params) : "");
     const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 12000);
     try{
@@ -335,6 +340,69 @@
     } finally { clearTimeout(to); }
   }
   const depsOf = v => Array.isArray(v) ? v : (v && v.departures) || [];
+
+  // ---------- RMV (HAFAS ReST) – liefert dieselbe Form wie die BVG-Schnittstelle ----------
+  const RMV = "https://www.rmv.de/hapi";
+  const arr = x => x == null ? [] : Array.isArray(x) ? x : [x];
+  async function rmv(service, params){
+    const key = store.get("rmvKey", "");
+    if(!key) throw new Error("Kein RMV-Schlüssel eingetragen.");
+    const url = `${RMV}/${service}?` + new URLSearchParams({...params, format:"json", accessId:key});
+    const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 12000);
+    let r;
+    try{ r = await fetch(url, {signal: ctrl.signal, headers:{accept:"application/json"}}); }
+    catch(e){ throw new Error("RMV-Server nicht erreichbar."); }
+    finally{ clearTimeout(to); }
+    if(r.status === 401 || r.status === 403) throw new Error("RMV-Schlüssel wurde abgelehnt.");
+    if(!r.ok) throw new Error("RMV-Fehler " + r.status);
+    const j = await r.json();
+    if(j.errorCode) throw new Error("RMV: " + (j.errorText || j.errorCode));
+    return j;
+  }
+  const rmvLine = p => String(p.line || p.displayNumber || p.num || p.name || "").trim().replace(/^(Bus|Tram|Str\.?|Straßenbahn|AST)\s+/i, "");
+  function rmvProduct(p){
+    const line = rmvLine(p), t = [p.catOutL, p.catOut, p.catOutS, p.name].join(" ").toLowerCase();
+    if(/^s\d/i.test(line)) return "suburban";
+    if(/^u\d/i.test(line)) return "subway";
+    if(/tram|straßenbahn|strab|\bstr\b/.test(t)) return "tram";
+    if(/bus|ast|anruf|ruf/.test(t)) return "bus";
+    return "regional";
+  }
+  const num = v => parseFloat(v);
+  async function rmvApi(path, params){
+    if(path === "/locations"){
+      const j = await rmv("location.name", {input: params.query, maxNo: params.results || 5, type: "SA"});
+      return arr(j.stopLocationOrCoordLocation).map(o => {
+        if(o.StopLocation){ const s = o.StopLocation; return {type:"stop", id: s.extId || s.id, name: s.name, location:{latitude:num(s.lat), longitude:num(s.lon)}}; }
+        if(o.CoordLocation){ const c = o.CoordLocation; return {type:"location", address: c.name, location:{latitude:num(c.lat), longitude:num(c.lon)}}; }
+        return null;
+      }).filter(Boolean);
+    }
+    if(path === "/locations/nearby"){
+      const j = await rmv("location.nearbystops", {originCoordLat: params.latitude, originCoordLong: params.longitude, r: params.distance, maxNo: Math.min(params.results || 50, 100), type: "S"});
+      return arr(j.stopLocationOrCoordLocation).map(o => o.StopLocation).filter(Boolean).map(s => {
+        const lines = []; const products = {};
+        arr(s.productAtStop).forEach(p => { const name = rmvLine(p), product = rmvProduct(p);
+          if(name && !lines.some(l => l.name === name)) lines.push({name, product}); products[product] = true; });
+        return {type:"stop", id: s.extId || s.id, name: s.name, distance: num(s.dist) || 0,
+                location:{latitude:num(s.lat), longitude:num(s.lon)}, products, lines};
+      });
+    }
+    const m = path.match(/^\/stops\/([^/]+)\/departures$/);
+    if(m){
+      const j = await rmv("departureBoard", {id: decodeURIComponent(m[1]), duration: params.duration || 60, maxJourneys: params.results || 40});
+      return { departures: arr(j.Departure).map(d => {
+        const p = arr(d.Product)[0] || {};
+        const planned = d.date && d.time ? `${d.date}T${d.time}` : null;
+        const real = (d.rtDate || d.date) && d.rtTime ? `${d.rtDate || d.date}T${d.rtTime}` : null;
+        return { tripId: (d.JourneyDetailRef && d.JourneyDetailRef.ref) || (rmvLine(p) + planned + d.direction),
+                 line: {name: rmvLine(p) || rmvLine(d), product: rmvProduct(p)},
+                 direction: d.direction, when: real || planned, plannedWhen: planned,
+                 cancelled: d.cancelled === true || d.cancelled === "true" };
+      })};
+    }
+    throw new Error("unbekannt");
+  }
 
   // ---------- Ansichten ----------
   function show(view){
@@ -371,10 +439,28 @@
   }
   $("#radius").addEventListener("input", e => { draft.radius = +e.target.value; syncRadius(); });
   let provider = store.get("provider", "bvg");
+  // RMV-Schlüssel: einmal über den Link …/#rmvkey=… oder im Feld auf dem Deckblatt
+  function importKey(){
+    const m = location.hash.match(/rmvkey=([0-9a-f-]{20,})/i);
+    if(!m) return false;
+    store.set("rmvKey", m[1]);
+    try{ history.replaceState(null, "", location.pathname + location.search); }catch{}
+    return true;
+  }
+  importKey();
+  addEventListener("hashchange", () => { if(importKey()) syncProvider(); });
+  document.addEventListener("input", e => {
+    if(e.target.id !== "rmvKey") return;
+    const v = e.target.value.trim();
+    if(/^[0-9a-f-]{30,}$/i.test(v)){ store.set("rmvKey", v); e.target.value = ""; syncProvider(); }
+  });
   function syncProvider(){
     document.querySelectorAll("#provider .btn").forEach(b => b.classList.toggle("ghost", b.dataset.prov !== provider));
     $("#coverIcon").src = provider === "rmv" ? "icon-rmv-512.png" : "icon-bvg-512.png";
     document.documentElement.classList.toggle("rmv", provider === "rmv");
+    const needKey = provider === "rmv" && !isPreview && !store.get("rmvKey", "");
+    $("#rmvKeyBox").hidden = !needKey;
+    if(currentView === "cover" && $("#startBtn")) $("#startBtn").disabled = needKey;
     const tc = document.querySelector('meta[name="theme-color"]'); if(tc) tc.content = "#000000";
   }
   $("#provider").addEventListener("click", e => {
@@ -384,6 +470,7 @@
   syncProvider();
   function footCover(){
     actions(`<button class="btn" id="startBtn">Start</button>`);
+    if(provider === "rmv" && !isPreview && !store.get("rmvKey", "")) $("#startBtn").disabled = true;
     $("#startBtn").onclick = () => show("address");
   }
   function footAddress(){
@@ -449,6 +536,10 @@
       draft.found = mergeStops(raw.filter(s => s.type === "stop" || s.type === "station"));
       draft.selected.clear(); draft.lines = {}; draft.dirs = {}; draft.dirOpts = {};
     }catch(err){
+      if(provider === "rmv" && !isPreview){
+        $("#picked").textContent = err.message || "RMV nicht erreichbar.";
+        btn.disabled = false; btn.textContent = "Stationen suchen"; return;
+      }
       startDemo(q); draft.selected.clear(); draft.lines = {}; draft.dirs = {}; draft.dirOpts = {};
     }
     show("stations"); renderStations();
@@ -742,7 +833,7 @@
       
     }catch{
       if(lastBoard) renderBoard(lastBoard);
-      else $("#board").innerHTML = `<div class="msg">Keine Verbindung zur BVG.<br>Neuer Versuch in 30 s.</div>`;
+      else $("#board").innerHTML = `<div class="msg">Keine Verbindung zum Fahrplan.<br>Neuer Versuch in 30 s.</div>`;
       
     }
     boardTimer = setTimeout(loadBoard, REFRESH_MS);
