@@ -200,7 +200,8 @@
   .dline{padding-top:3px}
   .dopts{display:flex;flex-wrap:wrap;gap:6px}
   .dchip{min-width:0;text-align:left}
-  .keyfield{width:100%;max-width:260px}
+  .keyfield{flex:none;width:100%;max-width:260px}
+  .cover-icons .cover-icon[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -214,13 +215,13 @@
   <!-- Deckblatt -->
   <section id="v-cover" class="view" hidden>
     <main class="cover">
-      <img src="icon-bvg-512.png" alt="" class="cover-icon" id="coverIcon">
+      <div class="cover-icons"><img src="cover-bvg.png" alt="BVG" class="cover-icon" id="iconBvg"><img src="cover-rmv.png" alt="RMV" class="cover-icon" id="iconRmv" hidden></div>
       <div class="cover-name">Gleich</div>
       <div class="provider" id="provider">
         <button type="button" class="btn" data-prov="bvg">BVG</button>
         <button type="button" class="btn ghost" data-prov="rmv">RMV</button>
       </div>
-      <label class="field keyfield" id="rmvKeyBox" hidden><input id="rmvKey" type="text" placeholder="RMV-Schlüssel eingeben" autocomplete="off" spellcheck="false"></label>
+      <label class="field keyfield" id="rmvKeyBox" hidden><input id="rmvKey" type="text" placeholder="RMV-Schlüssel" autocomplete="off" spellcheck="false"></label>
     </main>
   </section>
 
@@ -456,7 +457,8 @@
   });
   function syncProvider(){
     document.querySelectorAll("#provider .btn").forEach(b => b.classList.toggle("ghost", b.dataset.prov !== provider));
-    $("#coverIcon").src = provider === "rmv" ? "icon-rmv-512.png" : "icon-bvg-512.png";
+    $("#iconBvg").hidden = provider === "rmv";
+    $("#iconRmv").hidden = provider !== "rmv";
     document.documentElement.classList.toggle("rmv", provider === "rmv");
     const needKey = provider === "rmv" && !isPreview && !store.get("rmvKey", "");
     $("#rmvKeyBox").hidden = !needKey;
